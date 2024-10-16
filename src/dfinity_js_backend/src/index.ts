@@ -79,9 +79,8 @@ const HealthRecord = Record({
   id: text,
   user_id: text,
   heart_rate: nat64,
-  blood_pressure: text,
+  blood_pressure: nat64,
   activity_level: text,
-  status: HealthStatus,
   recorded_at: nat64,
 });
 
@@ -171,9 +170,8 @@ const UserPayload = Record({
 const HealthRecordPayload = Record({
   user_id: text,
   heart_rate: nat64,
-  blood_pressure: text,
+  blood_pressure: nat64,
   activity_level: text,
-  status: HealthStatus,
 });
 
 // Medication Reminder Payload
@@ -233,23 +231,23 @@ const FitnessChallengeParticipantPayload = Record({
 
 // Storages
 const usersStorage = StableBTreeMap(0, text, User);
-const healthRecordsStorage = StableBTreeMap(0, text, HealthRecord);
-const medicationRemindersStorage = StableBTreeMap(0, text, MedicationReminder);
+const healthRecordsStorage = StableBTreeMap(2, text, HealthRecord);
+const medicationRemindersStorage = StableBTreeMap(3, text, MedicationReminder);
 const virtualConsultationsStorage = StableBTreeMap(
-  0,
+  4,
   text,
   VirtualConsultation
 );
-const dietRecordsStorage = StableBTreeMap(0, text, DietRecord);
+const dietRecordsStorage = StableBTreeMap(5, text, DietRecord);
 const exerciseRecommendationsStorage = StableBTreeMap(
-  0,
+  6,
   text,
   ExerciseRecommendation
 );
-const mentalHealthRecordsStorage = StableBTreeMap(0, text, MentalHealthRecord);
-const fitnessChallengesStorage = StableBTreeMap(0, text, FitnessChallenge);
+const mentalHealthRecordsStorage = StableBTreeMap(7, text, MentalHealthRecord);
+const fitnessChallengesStorage = StableBTreeMap(8, text, FitnessChallenge);
 const fitnessChallengeParticipantsStorage = StableBTreeMap(
-  0,
+  9,
   text,
   FitnessChallengeParticipant
 );
@@ -363,13 +361,17 @@ export default Canister({
   ),
 
   // Get Health Record by ID
-  getHealthRecordById: query([text], Result(HealthRecord, Message), (recordId) => {
-    const recordOpt = healthRecordsStorage.get(recordId);
-    if ("None" in recordOpt) {
-      return Err({ NotFound: "Health record not found" });
+  getHealthRecordById: query(
+    [text],
+    Result(HealthRecord, Message),
+    (recordId) => {
+      const recordOpt = healthRecordsStorage.get(recordId);
+      if ("None" in recordOpt) {
+        return Err({ NotFound: "Health record not found" });
+      }
+      return Ok(recordOpt["Some"]);
     }
-    return Ok(recordOpt["Some"]);
-  }),
+  ),
 
   // Get All Health Records
   getAllHealthRecords: query([], Result(Vec(HealthRecord), Message), () => {
@@ -432,9 +434,11 @@ export default Canister({
     [text],
     Result(Vec(MedicationReminder), Message),
     (userId) => {
-      const reminders = medicationRemindersStorage.values().filter((reminder) => {
-        return reminder.user_id === userId;
-      });
+      const reminders = medicationRemindersStorage
+        .values()
+        .filter((reminder) => {
+          return reminder.user_id === userId;
+        });
 
       if (reminders.length === 0) {
         return Err({ NotFound: "No medication reminders found." });
@@ -514,11 +518,11 @@ export default Canister({
     [text],
     Result(Vec(VirtualConsultation), Message),
     (userId) => {
-      const consultations = virtualConsultationsStorage.values().filter(
-        (consultation) => {
+      const consultations = virtualConsultationsStorage
+        .values()
+        .filter((consultation) => {
           return consultation.user_id === userId;
-        }
-      );
+        });
 
       if (consultations.length === 0) {
         return Err({ NotFound: "No virtual consultations found." });
@@ -533,11 +537,11 @@ export default Canister({
     [text],
     Result(Vec(VirtualConsultation), Message),
     (providerId) => {
-      const consultations = virtualConsultationsStorage.values().filter(
-        (consultation) => {
+      const consultations = virtualConsultationsStorage
+        .values()
+        .filter((consultation) => {
           return consultation.provider_id === providerId;
-        }
-      );
+        });
 
       if (consultations.length === 0) {
         return Err({ NotFound: "No virtual consultations found." });
@@ -603,17 +607,21 @@ export default Canister({
   }),
 
   // Get Diet Record by User ID
-  getDietRecordByUserId: query([text], Result(Vec(DietRecord), Message), (userId) => {
-    const records = dietRecordsStorage.values().filter((record) => {
-      return record.user_id === userId;
-    });
+  getDietRecordByUserId: query(
+    [text],
+    Result(Vec(DietRecord), Message),
+    (userId) => {
+      const records = dietRecordsStorage.values().filter((record) => {
+        return record.user_id === userId;
+      });
 
-    if (records.length === 0) {
-      return Err({ NotFound: "No diet records found." });
+      if (records.length === 0) {
+        return Err({ NotFound: "No diet records found." });
+      }
+
+      return Ok(records);
     }
-
-    return Ok(records);
-  }),
+  ),
 
   // Get All Diet Records
   getAllDietRecords: query([], Result(Vec(DietRecord), text), () => {
@@ -661,7 +669,9 @@ export default Canister({
     [text],
     Result(ExerciseRecommendation, Message),
     (recommendationId) => {
-      const recommendationOpt = exerciseRecommendationsStorage.get(recommendationId);
+      const recommendationOpt = exerciseRecommendationsStorage.get(
+        recommendationId
+      );
       if ("None" in recommendationOpt) {
         return Err({ NotFound: "Exercise recommendation not found" });
       }
@@ -674,11 +684,11 @@ export default Canister({
     [text],
     Result(Vec(ExerciseRecommendation), Message),
     (userId) => {
-      const recommendations = exerciseRecommendationsStorage.values().filter(
-        (recommendation) => {
+      const recommendations = exerciseRecommendationsStorage
+        .values()
+        .filter((recommendation) => {
           return recommendation.user_id === userId;
-        }
-      );
+        });
 
       if (recommendations.length === 0) {
         return Err({ NotFound: "No exercise recommendations found." });
@@ -693,11 +703,15 @@ export default Canister({
     [ExerciseType],
     Result(Vec(ExerciseRecommendation), Message),
     (exerciseType) => {
-      const recommendations = exerciseRecommendationsStorage.values().filter(
-        (recommendation) => {
-          return recommendation.exercise_type === exerciseType;
-        }
-      );
+      const recommendations = exerciseRecommendationsStorage
+        .values()
+        .filter((recommendation) => {
+          // Pattern match against exerciseType Variant
+          return (
+            Object.keys(recommendation.exercise_type)[0] ===
+            Object.keys(exerciseType)[0]
+          );
+        });
 
       if (recommendations.length === 0) {
         return Err({ NotFound: "No exercise recommendations found." });
@@ -746,7 +760,10 @@ export default Canister({
       };
 
       // Store the mental health record
-      mentalHealthRecordsStorage.insert(mentalHealthRecordId, mentalHealthRecord);
+      mentalHealthRecordsStorage.insert(
+        mentalHealthRecordId,
+        mentalHealthRecord
+      );
 
       // Return the mental health record
       return Ok(mentalHealthRecord);
@@ -770,7 +787,12 @@ export default Canister({
     Result(FitnessChallenge, Message),
     (payload) => {
       // Validate the payload to ensure all required fields are present
-      if (!payload.name || !payload.description || !payload.start_date || !payload.end_date) {
+      if (
+        !payload.name ||
+        !payload.description ||
+        !payload.start_date ||
+        !payload.end_date
+      ) {
         return Err({ InvalidPayload: "Required fields are missing." });
       }
 
