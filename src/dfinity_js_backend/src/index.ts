@@ -70,6 +70,7 @@ const User = Record({
   id: text,
   name: text,
   contact: text,
+  email: text, // Added email field
   user_type: UserType,
   owner: Principal,
   created_at: nat64,
@@ -252,10 +253,41 @@ const fitnessChallengeParticipantsStorage = StableBTreeMap(
   FitnessChallengeParticipant
 );
 
+const requestTimestamps = new Map<string, number[]>();
+
+const RATE_LIMIT = 5; // Max requests
+const TIME_FRAME = 60 * 1000; // 1 minute in milliseconds
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = requestTimestamps.get(userId) || [];
+
+  // Filter out timestamps older than the time frame
+  const recentTimestamps = timestamps.filter(timestamp => now - timestamp < TIME_FRAME);
+  
+  // Update the map with recent timestamps
+  requestTimestamps.set(userId, recentTimestamps);
+
+  // Check if the user has exceeded the rate limit
+  if (recentTimestamps.length >= RATE_LIMIT) {
+    return true; // User is rate limited
+  }
+
+  // Add the current timestamp
+  recentTimestamps.push(now);
+  return false; // User is not rate limited
+}
+
 // Functions
 export default Canister({
   // Create User Profile with Validations
   createUser: update([UserPayload], Result(User, Message), (payload) => {
+    const callerId = ic.caller().toText(); // Renamed variable to avoid conflict
+
+    if (isRateLimited(callerId)) {
+      return Err({ InvalidPayload: "Rate limit exceeded. Please try again later." });
+    }
+
     // Validate the payload to ensure all required fields are present
     if (!payload.name || !payload.contact || !payload.email) {
       return Err({ InvalidPayload: "Required fields are missing." });
@@ -270,7 +302,7 @@ export default Canister({
     // Ensure the email is unique
     const existingUser = usersStorage
       .values()
-      .find((user) => user.email === payload.email);
+      .find((user) => user.email === payload.email); // This will now work
     if (existingUser) {
       return Err({ InvalidPayload: "Email already exists." });
     }
@@ -308,7 +340,7 @@ export default Canister({
   // Fetch user profile by Principal
   getUserByPrincipal: query([], Result(User, Message), () => {
     const user = usersStorage.values().filter((user) => {
-      return user.owner.toText === ic.caller().toText;
+      return user.owner.toText() === ic.caller().toText(); // Corrected method call
     });
 
     if (user.length === 0) {
